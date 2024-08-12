@@ -17,6 +17,15 @@
   let 
     pkgs = nixpkgs.legacyPackages.x86_64-linux;
     
+    poise-configuration = pkgs.stdenv.mkDerivation {
+      name = "poise-configuration";
+      src = ./.;
+      installPhase = ''
+        mkdir -p $out
+        cp poise.inf $out/poise.inf
+      '';
+    };
+
     nes-vst = pkgs.stdenv.mkDerivation {
       name = "nes-vst-unwrapped";
       buildInputs = [ pkgs.unzip ];
@@ -80,7 +89,7 @@
         
         # Installing the VSTs
         cp "${nes-vst}/NES VST 1.2.dll" "$VST_PATH"
-        ${wine}/bin/wine ${poise}/Setup_Poise_64bit_1-1-55-6_Windows_Full.exe 
+        ${wine}/bin/wine ${poise}/Setup_Poise_64bit_1-1-55-6_Windows_Full.exe /LOADINF="${poise-configuration}/poise.inf" #/SAVEINF="$WINEPREFIX/poise.inf"
         # Make sure that yabridge chanloaders are in the right place
         cp -r ${yabridge}/lib/ $HOME/.local/share/yabridge/
 

@@ -1,0 +1,6 @@
+[Setup]
+Lang=default
+Dir=C:\windows
+Group=(Default)
+NoIcons=0
+Tasks=
