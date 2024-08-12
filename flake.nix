@@ -51,7 +51,16 @@
 
     winetricks = pkgs.winetricks;
     yabridge = pkgs.yabridge.override {inherit wine;} ;
-    yabridgectl = pkgs.yabridgectl.override {inherit wine;};
+    yabridgectl = pkgs.yabridgectl.overrideAttrs {
+      inherit wine yabridge;
+      postPatch = ''
+        # Add the yabridge path to the search path
+        substituteInPlace src/config.rs --replace '.chain(iter::once(user_path.clone()));' '.chain(iter::once(user_path.clone())).chain(iter::once(Path::new("${pkgs.yabridge}/lib").to_path_buf()));'
+        # Add the yabridge path to the test paths
+        substituteInPlace src/config.rs --replace 'pub const YABRIDGE_HOST_EXE_NAME: &str = "yabridge-host.exe";' 'pub const YABRIDGE_HOST_EXE_NAME: &str = "${pkgs.yabridge}/bin/yabridge-host.exe";'
+        substituteInPlace src/config.rs --replace 'pub const YABRIDGE_HOST_32_EXE_NAME: &str = "yabridge-host-32.exe";' 'pub const YABRIDGE_HOST_32_EXE_NAME: &str = "${pkgs.yabridge}/bin/yabridge-host-32.exe";'
+      '';
+    };
 
     setup-vsts-script = pkgs.writeShellScriptBin "setup-windows-vsts" ''
         # This script is run the first time the package is installed
