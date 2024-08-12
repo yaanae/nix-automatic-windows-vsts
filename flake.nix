@@ -4,11 +4,11 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
     nes-vst = {
-      url = "https://www.mattmontag.com/nesvst/NES-VST-1.2.zip";
+      url = "file+https://www.mattmontag.com/nesvst/NES-VST-1.2.zip";
       flake = false;
     };
     poise = {
-      url = "https://osc.sfo2.digitaloceanspaces.com/Setup_Poise_64bit_1-1-55-6_Windows_Full.exe";
+      url = "file+https://osc.sfo2.digitaloceanspaces.com/Setup_Poise_64bit_1-1-55-6_Windows_Full.exe";
       flake = false;
     };
   };
@@ -16,6 +16,31 @@
   outputs = { self, nixpkgs, ... }@inputs:
   let 
     pkgs = nixpkgs.legacyPackages.x86_64-linux;
+    
+    nes-vst = pkgs.stdenv.mkDerivation {
+      name = "nes-vst-unwrapped";
+      buildInputs = [ pkgs.unzip ];
+      unpackPhase = "true";
+      installPhase = ''
+        unzip ${inputs.nes-vst}
+        # ls -la ${inputs.nes-vst}
+        # echo break 1
+        # ls -la .
+        # echo break 2
+        mkdir -p $out
+        mv "NES VST 1.2.dll" $out
+        # ls -la $out
+      '';
+    };
+    poise = pkgs.stdenv.mkDerivation {
+      name = "poise-unwrapped";
+      unpackPhase = "true";
+      installPhase = ''
+        mkdir -p $out
+        cp ${inputs.poise} $out/Setup_Poise_64bit_1-1-55-6_Windows_Full.exe
+        ls $out
+      '';
+    };
 
     # Wine staging with mono
     wine = pkgs.wine.override {
@@ -27,8 +52,6 @@
     winetricks = pkgs.winetricks;
     yabridge = pkgs.yabridge;
     yabridgectl = pkgs.yabridgectl;
-    poise = inputs.poise;
-    nes-vst = inputs.nes-vst;
 
     setup-vsts-script = pkgs.writeShellScriptBin "setup-windows-vsts" ''
         # This script is run the first time the package is installed
