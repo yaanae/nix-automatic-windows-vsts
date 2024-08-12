@@ -56,20 +56,28 @@
     setup-vsts-script = pkgs.writeShellScriptBin "setup-windows-vsts" ''
         # This script is run the first time the package is installed
         # It should install the VSTs
-
+        
         # Setting up the wine prefix
         export WINEPREFIX="$HOME/.wine-nix/setup-windows-vsts"
         mkdir -p "$WINEPREFIX"
+
+        # Configuring the wine prefix
+        ${wine}/bin/winecfg /v win10
+        ${winetricks}/bin/winetricks corefonts
 
         # Prepare file structure
         export VST_PATH="$WINEPREFIX/drive_c/Program Files/Steinberg/VstPlugins"
         mkdir -p "$VST_PATH"
         
+        # Installing the VSTs
         cp "${nes-vst}/NES VST 1.2.dll" "$VST_PATH"
-        wine ${poise}/Setup_Poise_64bit_1-1-55-6_Windows_Full.exe 
+        ${wine}/bin/wine ${poise}/Setup_Poise_64bit_1-1-55-6_Windows_Full.exe 
+        # Make sure that yabridge chanloaders are in the right place
+        cp -r ${yabridge}/lib/ $HOME/.local/share/yabridge/
 
         # Let yabridge know where the VSTs are
-        yabridgectl add "$VST_PATH"
+        ${yabridgectl}/bin/yabridgectl add "$VST_PATH"
+        ${yabridgectl}/bin/yabridgectl sync --force
     '';
     setup-vsts = pkgs.symlinkJoin {
       name = "setup-windows-vsts";
