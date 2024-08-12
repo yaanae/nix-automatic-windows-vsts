@@ -41,13 +41,11 @@
 
         # Let yabridge know where the VSTs are
         yabridgectl add "$VST_PATH"
-      
     '';
     setup-vsts = pkgs.symlinkJoin {
       name = "setup-windows-vsts";
       paths = [ yabridge yabridgectl setup-vsts-script winetricks ];
     };
-
   in {
     packages.x86_64-linux.setup-vsts = setup-vsts;
   };
