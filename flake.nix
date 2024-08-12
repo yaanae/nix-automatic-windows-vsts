@@ -50,8 +50,8 @@
     };
 
     winetricks = pkgs.winetricks;
-    yabridge = pkgs.yabridge;
-    yabridgectl = pkgs.yabridgectl;
+    yabridge = pkgs.yabridge.override {inherit wine;} ;
+    yabridgectl = pkgs.yabridgectl.override {inherit wine;};
 
     setup-vsts-script = pkgs.writeShellScriptBin "setup-windows-vsts" ''
         # This script is run the first time the package is installed
