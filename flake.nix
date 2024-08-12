@@ -17,7 +17,13 @@
   let 
     pkgs = nixpkgs.legacyPackages.x86_64-linux;
 
-    wine = pkgs.wine;
+    # Wine staging with mono
+    wine = pkgs.wine.override {
+      embedInstallers = true; # Mono (and gecko, although we probably don't need that) will be installed automatically
+      wineRelease = "staging"; # Recommended by yabridge
+      wineBuild = "wineWow"; # Both 32-bit and 64-bit wine
+    };
+
     winetricks = pkgs.winetricks;
     yabridge = pkgs.yabridge;
     yabridgectl = pkgs.yabridgectl;
