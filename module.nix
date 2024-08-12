@@ -7,6 +7,20 @@ let
     wineRelease = "staging"; # Recommended by yabridge
     wineBuild = "wineWow"; # Both 32-bit and 64-bit wine
   };
+  
+  # The installation checker.
+  # This fish script will check if the correct wineprefix is set up and warn otherwise
+  check-installation = pkgs.writeShellApplication {
+    name = "check-windows-vst-installation";
+    runtimeInputs = [ pkgs.fish ];
+    text = ''
+      #!/usr/bin/env fish
+
+      if test -z $XDG_DATA_HOME/vstplugins
+        echo "You have yet to initialize your Windows VSTs! Run 'init-windows-vst' to set them up."
+      end
+    '';
+  };
 in
   {
 
