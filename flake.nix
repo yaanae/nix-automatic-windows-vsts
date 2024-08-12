@@ -16,7 +16,7 @@
   outputs = { self, nixpkgs, ... }@inputs:
   let 
     pkgs = nixpkgs.legacyPackages.x86_64-linux;
-    
+
     poise-configuration = pkgs.stdenv.mkDerivation {
       name = "poise-configuration";
       src = ./.;
@@ -32,13 +32,8 @@
       unpackPhase = "true";
       installPhase = ''
         unzip ${inputs.nes-vst}
-        # ls -la ${inputs.nes-vst}
-        # echo break 1
-        # ls -la .
-        # echo break 2
         mkdir -p $out
         mv "NES VST 1.2.dll" $out
-        # ls -la $out
       '';
     };
     poise = pkgs.stdenv.mkDerivation {
@@ -58,8 +53,24 @@
       wineBuild = "wineWow"; # Both 32-bit and 64-bit wine
     };
 
-    winetricks = pkgs.winetricks;
-    yabridge = pkgs.yabridge.override {inherit wine;} ;
+    yabridge = pkgs.yabridge.overrideAttrs {
+      wine = wine;
+      #postPatch = ''
+        #substituteInPlace src/chainloader/utils.cpp --replace-fail 'auto nix_profiles = getenv("NIX_PROFILES");' \
+        #'        if (void* handle = dlopen(name.c_str(), RTLD_LAZY | RTLD_LOCAL)) {\
+            #return handle;\
+        #}\
+        #auto nix_profiles = getenv("NIX_PROFILES");'
+      #'';
+      postFixup = pkgs.yabridge.postFixup + ''
+        # Force the use of the right wine prefix
+
+        substituteInPlace $out/bin/yabridge-host-32.exe --replace 'exec "$WINELOADER"' 'export WINEPREFIX="$HOME/.wine-nix/setup-windows-vsts" && exec "$WINELOADER"'
+        
+        substituteInPlace $out/bin/yabridge-host.exe --replace 'exec "$WINELOADER"' 'export WINEPREFIX="$HOME/.wine-nix/setup-windows-vsts" && exec "$WINELOADER"'
+      '';
+    };
+
     yabridgectl = pkgs.yabridgectl.overrideAttrs {
       inherit wine yabridge;
       postPatch = ''
@@ -71,10 +82,12 @@
       '';
     };
 
+    winetricks = pkgs.winetricks;
+
     setup-vsts-script = pkgs.writeShellScriptBin "setup-windows-vsts" ''
         # This script is run the first time the package is installed
         # It should install the VSTs
-        
+
         # Setting up the wine prefix
         export WINEPREFIX="$HOME/.wine-nix/setup-windows-vsts"
         mkdir -p "$WINEPREFIX"
@@ -90,18 +103,23 @@
         # Installing the VSTs
         cp "${nes-vst}/NES VST 1.2.dll" "$VST_PATH"
         ${wine}/bin/wine ${poise}/Setup_Poise_64bit_1-1-55-6_Windows_Full.exe /LOADINF="${poise-configuration}/poise.inf" #/SAVEINF="$WINEPREFIX/poise.inf"
+
         # Make sure that yabridge chanloaders are in the right place
         cp -r ${yabridge}/lib/ $HOME/.local/share/yabridge/
 
         # Let yabridge know where the VSTs are
         ${yabridgectl}/bin/yabridgectl add "$VST_PATH"
         ${yabridgectl}/bin/yabridgectl sync --force
+      
     '';
     setup-vsts = pkgs.symlinkJoin {
       name = "setup-windows-vsts";
       paths = [ yabridge yabridgectl setup-vsts-script winetricks ];
     };
+
   in {
     packages.x86_64-linux.setup-vsts = setup-vsts;
+    packages.x86_64-linux.yabridge = yabridge;
+    packages.x86_64-linux.yabridgectl = yabridgectl;
   };
 }
