@@ -1,18 +1,5 @@
 {
   "nodes": {
-    "nes-vst": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1374431954,
-        "narHash": "sha256-u7r+s+RRzBLJ9lZISETkA3a6KFTH/+eztmF0XCU38mk=",
-        "type": "tarball",
-        "url": "https://www.mattmontag.com/nesvst/NES-VST-1.2.zip"
-      },
-      "original": {
-        "type": "tarball",
-        "url": "https://www.mattmontag.com/nesvst/NES-VST-1.2.zip"
-      }
-    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1723175592,
@@ -29,23 +16,9 @@
         "type": "github"
       }
     },
-    "poise": {
-      "flake": false,
-      "locked": {
-        "narHash": "sha256-ZJEUVicbzCNVedQVLh2GEbo8263laGwXkUAlok3sdyE=",
-        "type": "file",
-        "url": "https://osc.sfo2.digitaloceanspaces.com/Setup_Poise_64bit_1-1-55-6_Windows_Full.exe"
-      },
-      "original": {
-        "type": "file",
-        "url": "https://osc.sfo2.digitaloceanspaces.com/Setup_Poise_64bit_1-1-55-6_Windows_Full.exe"
-      }
-    },
     "root": {
       "inputs": {
-        "nes-vst": "nes-vst",
-        "nixpkgs": "nixpkgs",
-        "poise": "poise"
+        "nixpkgs": "nixpkgs"
       }
     }
   },

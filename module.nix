@@ -52,12 +52,9 @@ let
   };
 
   install-single-vst = name: install: inputs: (pkgs.writeShellApplication {
-    runtimeShell = pkgs.fish;
     name = "install-single-vst-" + name;
-    runtimeInputs = [ pkgs.bash cfg.wine ] + inputs;
+    runtimeInputs = [ cfg.wine ] + inputs;
     text = ''
-      #!/usr/bin/env bash
-
       export $WINEPREFIX=$XDG_DATA_HOME/vstplugins
       export $VST2_DIR=$WINEPREFIX/drive_c/Program\ Files/Common\ Files/Steinberg/VstPlugins
       export $VST3_DIR=$WINEPREFIX/drive_c/Program\ Files/Common\ Files/VST3
@@ -70,20 +67,18 @@ let
 
   install-packages = lib.mapAttrsToList (name: options: (install-single-vst name options.install options.inputs )) cfg.plugins;
   install-packages-list = lib.lists.concatMap (pkg: [ "${pkg}" ]) install-packages;
-  install-packages-string = lib.strings.join " " install-packages-list;
+  install-packages-string = lib.strings.concatStringsSep " " install-packages-list;
 
-  init-windows-vst = pkgs.writeShellApplication {
-    runtimeShell = pkgs.fish;
+  init-windows-vst = writeFishApplication {
     name = "init-windows-vst";
-    runtimeInputs = [ pkgs.fish ];
     text = ''
       #!/usr/bin/env fish
 
-      ${init-wineprefix}
+      echo ${init-wineprefix}
       
       echo "Installing user defined plugins..."
 
-
+      echo ${install-packages-string}
     '';
   };
 in
@@ -100,7 +95,7 @@ in
     # Allow an attribute set for the user defined plugins
     # The set contains and enabled flag and an installation script string
     plugins = lib.mkOption {
-      type = lib.types.submodule {
+      type = lib.types.attrsOf (lib.types.submodule {
         options = {
           enable = lib.mkOption {
             type = lib.types.bool;
@@ -126,7 +121,7 @@ in
             description = "Extra nix packages to use during installation";
           };
         };
-      };
+      });
       default = {};
       example = {
         "nes-vst" = {
@@ -221,6 +216,7 @@ in
     environment.interactiveShellInit = lib.mkIf cfg.check "sh ${check-installation}/bin/check-windows-vst-installation";
     programs.fish.interactiveShellInit = lib.mkIf cfg.check "sh ${check-installation}/bin/check-windows-vst-installation";
 
-    environment.systemPackages = [ cfg.yabridge cfg.yabridgectl ];
+    #environment.systemPackages = lib.trace "debug ${install-packages} && ${install-packages-list} && ${install-packages-string}" [ cfg.yabridge cfg.yabridgectl init-windows-vst ];
+    environment.systemPackages = lib.trace install-packages-list [ cfg.yabridge cfg.yabridgectl ];
   };
 }
