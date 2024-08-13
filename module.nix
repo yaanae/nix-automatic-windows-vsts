@@ -1,13 +1,17 @@
+
 {lib, pkgs, config, ...}:
 let 
   cfg = config.services.windows-vsts;
-  
+
   defaultWine = pkgs.wine.override {
     embedInstallers = true; # Mono (and gecko, although we probably don't need that) will be installed automatically
     wineRelease = "staging"; # Recommended by yabridge
     wineBuild = "wineWow"; # Both 32-bit and 64-bit wine
   };
-  
+  wine = cfg.wine;
+  winetricks = cfg.winetricks;
+  tricks-command = cfg.tricks-command;
+
   # The installation checker.
   # This fish script will check if the correct wineprefix is set up and warn otherwise
   check-installation = pkgs.writeShellApplication {
@@ -20,6 +24,37 @@ let
         echo "You have yet to initialize your Windows VSTs! Run 'init-windows-vst' to set them up."
       end
     '';
+  };
+
+  # The initialization script.
+  # This fish script will set up the wineprefix for the user
+  init-wineprefix = pkgs.writeShellApplication {
+    name = "init-wineprefix";
+    runtimeInputs = [ pkgs.fish winetricks wine ];
+    text = ''
+      #!/usr/bin/env fish
+
+      if test -z $XDG_DATA_HOME/vstplugins
+        echo "Setting up VST Wine Prefix..."
+        mkdir -p $XDG_DATA_HOME/vstplugins
+
+        wincfg /v 10
+        exec "${tricks-command}"
+
+        echo "Wine Prefix is done setting up!"
+      else
+        echo "Windows VSTs already set up!"
+      end
+    '';
+
+    init-windows-vst = pkgs.writeShellApplication {
+      name = "init-windows-vst";
+      runtimeInputs = [ pkgs.fish ];
+      text = ''
+        #!/usr/bin/env fish
+
+        '';
+    };
   };
 in
   {
@@ -41,7 +76,7 @@ in
           # Installation script
           install = lib.types.str;
           # Extra nix packages to install
-          inputs = lib.types.listOf lib.types.str;
+          inputs = lib.types.listOf lib.types.package;
         };
       };
       default = {};
@@ -68,6 +103,25 @@ in
       description = ''
         The wine version to use.
         "embedInstallers" override in wine is recommended to be set to true
+      '';
+    };
+
+    # Allow the user to use custom winetricks version
+    winetricks = lib.mkOption {
+      type = lib.types.package;
+      default = pkgs.winetricks;
+      example = pkgs.winetricks;
+      description = ''
+        The winetricks version to use.
+      '';
+    };
+
+    tricks-command = lib.mkOption {
+      type = lib.types.str;
+      default = "winetricks allfonts";
+      example = "winetricks corefonts";
+      description = ''
+        The winetricks command to run when setting up the wineprefix
       '';
     };
 
@@ -102,10 +156,12 @@ in
         The path to the wine prefix to generate and use
       '';
     };
-
   };
 
   config = lib.mkIf cfg.enable {
+    # Run a command when the users interactive shell is started
+    environment.interactiveShellInit = "${check-installation}";
     environment.systemPackages = [];
+      
   };
 }
