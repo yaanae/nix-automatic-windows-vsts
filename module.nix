@@ -3,6 +3,15 @@
 let 
   cfg = config.nix-automatic-windows-vsts;
 
+  # Make writeShellApplication but with fish
+  writeFishApplication = {name, runtimeInputs ? [], text}: pkgs.writeShellApplication {
+    name = name;
+    runtimeInputs = runtimeInputs ++ [ pkgs.fish ];
+    text = ''
+      fish ${pkgs.writeTextFile { name = name + ".fish"; text = text; destination = "/run.fish"; }}/run.fish
+    '';
+  };
+
   defaultWine = pkgs.wine.override {
     embedInstallers = true; # Mono (and gecko, although we probably don't need that) will be installed automatically
     wineRelease = "staging"; # Recommended by yabridge
@@ -14,13 +23,10 @@ let
 
   # The installation checker.
   # This fish script will check if the correct wineprefix is set up and warn otherwise
-  check-installation = pkgs.writeShellApplication {
+  check-installation = writeFishApplication {
     name = "check-windows-vst-installation";
-    runtimeInputs = [ pkgs.fish ];
     text = ''
-      #!/usr/bin/env fish
-
-      if test -z $XDG_DATA_HOME/vstplugins
+      if ! test -d $XDG_DATA_HOME/vstplugins
         echo "You have yet to initialize your Windows VSTs! Run 'init-windows-vst' to set them up."
       end
     '';
@@ -30,7 +36,7 @@ let
   # This fish script will set up the wineprefix for the user
   init-wineprefix = pkgs.writeShellApplication {
     name = "init-wineprefix";
-    runtimeInputs = [ pkgs.fish winetricks wine ];
+    runtimeInputs = [ winetricks wine ];
     text = ''
       #!/usr/bin/env fish
 
@@ -49,6 +55,7 @@ let
   };
 
   install-single-vst = name: install: inputs: (pkgs.writeShellApplication {
+    runtimeShell = pkgs.fish;
     name = "install-single-vst-" + name;
     runtimeInputs = [ pkgs.bash wine ] + inputs;
     text = ''
@@ -69,6 +76,7 @@ let
   install-packages-string = lib.strings.join " " install-packages-list;
 
   init-windows-vst = pkgs.writeShellApplication {
+    runtimeShell = pkgs.fish;
     name = "init-windows-vst";
     runtimeInputs = [ pkgs.fish ];
     text = ''
@@ -203,7 +211,7 @@ in
 
   config = lib.mkIf cfg.enable {
     # Run a command when the users interactive shell is started
-    environment.interactiveShellInit = "${check-installation}";
+    environment.interactiveShellInit = lib.trace "${check-installation}" "${check-installation}";
     environment.systemPackages = [];
       
   };
