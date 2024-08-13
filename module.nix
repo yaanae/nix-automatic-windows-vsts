@@ -17,9 +17,6 @@ let
     wineRelease = "staging"; # Recommended by yabridge
     wineBuild = "wineWow"; # Both 32-bit and 64-bit wine
   };
-  wine = cfg.wine;
-  winetricks = cfg.winetricks;
-  tricks-command = cfg.tricks-command;
 
   # The installation checker.
   # This fish script will check if the correct wineprefix is set up and warn otherwise
@@ -36,7 +33,7 @@ let
   # This fish script will set up the wineprefix for the user
   init-wineprefix = pkgs.writeShellApplication {
     name = "init-wineprefix";
-    runtimeInputs = [ winetricks wine ];
+    runtimeInputs = [ cfg.winetricks cfg.wine ];
     text = ''
       #!/usr/bin/env fish
 
@@ -45,7 +42,7 @@ let
         mkdir -p $XDG_DATA_HOME/vstplugins
 
         wincfg /v 10
-        exec "${tricks-command}"
+        exec "${cfg.tricks-command}"
 
         echo "Wine Prefix is done setting up!"
       else
@@ -57,7 +54,7 @@ let
   install-single-vst = name: install: inputs: (pkgs.writeShellApplication {
     runtimeShell = pkgs.fish;
     name = "install-single-vst-" + name;
-    runtimeInputs = [ pkgs.bash wine ] + inputs;
+    runtimeInputs = [ pkgs.bash cfg.wine ] + inputs;
     text = ''
       #!/usr/bin/env bash
 
@@ -146,6 +143,13 @@ in
       '';
     };
 
+    check = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      example = true;
+      description = "Check if the installation is done on shell start";
+    };
+
     # Allow the user to use custom wine version
     wine = lib.mkOption {
       type = lib.types.package;
@@ -211,8 +215,12 @@ in
 
   config = lib.mkIf cfg.enable {
     # Run a command when the users interactive shell is started
-    environment.interactiveShellInit = lib.trace "${check-installation}" "${check-installation}";
-    environment.systemPackages = [];
-      
+    # For some reason fish won't look at environment.interactiveShellInit,
+    # so we set that manually.
+    # There is likely some other shells that break this, probably all non POSIX shells
+    environment.interactiveShellInit = lib.mkIf cfg.check "sh ${check-installation}/bin/check-windows-vst-installation";
+    programs.fish.interactiveShellInit = lib.mkIf cfg.check "sh ${check-installation}/bin/check-windows-vst-installation";
+
+    environment.systemPackages = [ cfg.yabridge cfg.yabridgectl ];
   };
 }
