@@ -1,7 +1,7 @@
 
 {lib, pkgs, config, ...}:
 let 
-  cfg = config.services.windows-vsts;
+  cfg = config.nix-automatic-windows-vsts;
 
   defaultWine = pkgs.wine.override {
     embedInstallers = true; # Mono (and gecko, although we probably don't need that) will be installed automatically
@@ -46,20 +46,45 @@ let
         echo "Windows VSTs already set up!"
       end
     '';
+  };
 
-    init-windows-vst = pkgs.writeShellApplication {
-      name = "init-windows-vst";
-      runtimeInputs = [ pkgs.fish ];
-      text = ''
-        #!/usr/bin/env fish
+  install-single-vst = name: install: inputs: (pkgs.writeShellApplication {
+    name = "install-single-vst-" + name;
+    runtimeInputs = [ pkgs.bash wine ] + inputs;
+    text = ''
+      #!/usr/bin/env bash
 
-        '';
-    };
+      export $WINEPREFIX=$XDG_DATA_HOME/vstplugins
+      export $VST2_DIR=$WINEPREFIX/drive_c/Program\ Files/Common\ Files/Steinberg/VstPlugins
+      export $VST3_DIR=$WINEPREFIX/drive_c/Program\ Files/Common\ Files/VST3
+
+      echo "Installing ${name}..."
+      ${install}
+      echo "${name} installed!"
+    '';
+  });
+
+  install-packages = lib.mapAttrsToList (name: options: (install-single-vst name options.install options.inputs )) cfg.plugins;
+  install-packages-list = lib.lists.concatMap (pkg: [ "${pkg}" ]) install-packages;
+  install-packages-string = lib.strings.join " " install-packages-list;
+
+  init-windows-vst = pkgs.writeShellApplication {
+    name = "init-windows-vst";
+    runtimeInputs = [ pkgs.fish ];
+    text = ''
+      #!/usr/bin/env fish
+
+      ${init-wineprefix}
+      
+      echo "Installing user defined plugins..."
+
+
+    '';
   };
 in
   {
 
-  options.services.windows-vsts = {
+  options.nix-automatic-windows-vsts = {
     enable = lib.mkOption {
       type = lib.types.bool;
       default = false;
@@ -72,11 +97,29 @@ in
     plugins = lib.mkOption {
       type = lib.types.submodule {
         options = {
-          enable = lib.types.bool;
+          enable = lib.mkOption {
+            type = lib.types.bool;
+            default = false;
+            example = true;
+            description = "Enable the plugin";
+          };
           # Installation script
-          install = lib.types.str;
+          install = lib.mkOption {
+            type = lib.types.lines;
+            default = '''';
+            example = ''
+              unzip ''${inputs.nes-vst}
+              mv "NES VST 1.2.dll" $VST2_DIR
+            '';
+            description = "The installation script for the plugin";
+          };
           # Extra nix packages to install
-          inputs = lib.types.listOf lib.types.package;
+          inputs = lib.mkOption {
+            type = lib.types.listOf lib.types.package;
+            default = [];
+            example = [ pkgs.unzip ];
+            description = "Extra nix packages to use during installation";
+          };
         };
       };
       default = {};
