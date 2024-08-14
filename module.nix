@@ -3,6 +3,14 @@
 let 
   cfg = config.nix-automatic-windows-vsts;
 
+  writeFishApplicationWIP = {name, runtimeInputs ? [], text}: pkgs.writeTextFile {
+    name = name + ".fish";
+    executable = true;
+    text = ''
+      #!${pkgs.fish}/bin/fish
+    '';
+  };
+
   # Make writeShellApplication but with fish
   writeFishApplication = {name, runtimeInputs ? [], text}: pkgs.writeShellApplication {
     name = name;
@@ -36,30 +44,27 @@ let
     name = "init-wineprefix";
     runtimeInputs = [ cfg.winetricks cfg.wine ];
     text = ''
-      if test -z $XDG_DATA_HOME/vstplugins
-        echo "Setting up VST Wine Prefix..."
-        mkdir -p $XDG_DATA_HOME/vstplugins
+      echo "Setting up VST Wine Prefix..."
+      mkdir -p $XDG_DATA_HOME/vstplugins
 
-        wincfg /v 10
-        exec "${cfg.tricks-command}"
+      wincfg /v 10
+      exec "${cfg.tricks-command}"
 
-        echo "Wine Prefix is done setting up!"
-      else
-        echo "Windows VSTs already set up!"
-      end
+      echo "Wine Prefix is done setting up!"
     '';
   };
 
   install-single-vst = name: install: inputs: (pkgs.writeShellApplication {
     name = "install-single-vst-" + name;
-    #runtimeInputs = [ cfg.wine ] + inputs;
+    runtimeInputs = [ cfg.wine ] ++ inputs;
     text = ''
       export "$WINEPREFIX"="$XDG_DATA_HOME/vstplugins"
       export "$VST2_DIR"="$WINEPREFIX/drive_c/Program\ Files/Common\ Files/Steinberg/VstPlugins"
       export "$VST3_DIR"="$WINEPREFIX/drive_c/Program\ Files/Common\ Files/VST3"
 
       echo "Installing ${name}..."
-      bash ${pkgs.writeTextFile { name = name + ".sh"; text = install; destination = "/run.sh"; }}/run.sh
+      #bash ''${pkgs.writeTextFile { name = name + ".sh"; text = install; destination = "/run.sh"; }}/run.sh
+      ${install}
       echo "${name} installed!"
     '';
   });
@@ -67,25 +72,23 @@ let
   packages = lib.attrsets.mapAttrsToList (name: value: {name = name; install = value.install; inputs = value.inputs;}) cfg.plugins;
   installer-packages = lib.lists.concatMap (pkg: [ (install-single-vst pkg.name pkg.install pkg.inputs) ]) packages;
   installer-packages-list = lib.lists.concatMap (pkg: [ "${pkg}" ]) installer-packages;
-  installer-packages-string = lib.strings.concatStringsSep " " installer-packages-list;
-
-  install-packages = (lib.mapAttrsToList (name: options: (install-single-vst name options.install options.inputs )) cfg.plugins);
-  built-packages = lib.debug.traceValSeq (lib.lists.concatMap (pkg: [ (pkgs.callPackage pkg {}) ]) install-packages);
-  install-packages-list = lib.lists.concatMap (pkg: [ "${pkg}" ]) built-packages;
-  install-packages-string = lib.strings.concatStringsSep " " install-packages-list;
+  #installer-packages-string = lib.strings.concatStringsSep " " installer-packages-list;
+  package-names = lib.lists.concatMap (pkg: [ "${pkg.name}" ]) packages;
+  install-strings = lib.lists.zipListsWith (a: b: "${a}/bin/install-single-vst-${b}") installer-packages-list package-names;
+  install-string = lib.strings.concatStringsSep "\n" install-strings;
 
   init-windows-vst = writeFishApplication {
     name = "init-windows-vst";
     text = ''
       #!/usr/bin/env fish
-
-      echo ${init-wineprefix}
       
-      echo "Installing user defined plugins..."
-
-
-
-      echo ${installer-packages-string}
+      if test ! -d $XDG_DATA_HOME/vstplugins
+        ${init-wineprefix}/bin/init-wineprefix
+        echo "Installing user defined plugins..."
+        ${install-string}
+      else
+        echo "Windows VSTs already set up!"
+      end
     '';
   };
 in
