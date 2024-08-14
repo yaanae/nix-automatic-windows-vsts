@@ -3,21 +3,17 @@
 let 
   cfg = config.nix-automatic-windows-vsts;
 
-  writeFishApplicationWIP = {name, runtimeInputs ? [], text}: pkgs.writeTextFile {
-    name = name + ".fish";
+  writeFishApplication = {name, runtimeInputs ? [], text}: pkgs.writeTextFile {
+    name = name;
     executable = true;
+    destination = "/bin/${name}";
     text = ''
       #!${pkgs.fish}/bin/fish
-    '';
-  };
+      '' + lib.optionalString (runtimeInputs != []) ''
+      set -px PATH ${lib.strings.concatStringsSep " " (lib.lists.concatMap (pkg: [ "${pkg}/bin" ]) runtimeInputs)}
+      '' + ''
 
-  # Make writeShellApplication but with fish
-  writeFishApplication = {name, runtimeInputs ? [], text}: pkgs.writeShellApplication {
-    name = name;
-    runtimeInputs = runtimeInputs ++ [ pkgs.fish ];
-    checkPhase = "";
-    text = ''
-      fish ${pkgs.writeTextFile { name = name + ".fish"; text = text; destination = "/run.fish"; }}/run.fish
+      ${text}
     '';
   };
 
@@ -32,8 +28,12 @@ let
   check-installation = writeFishApplication {
     name = "check-windows-vst-installation";
     text = ''
-      if ! test -d $XDG_DATA_HOME/vstplugins
+      set WINEPREFIX "$XDG_DATA_HOME/vstplugins"
+      
+      if ! test -d $WINEPREFIX
+        echo "----------------------------------"
         echo "You have yet to initialize your Windows VSTs! Run 'init-windows-vst' to set them up."
+        echo "----------------------------------"
       end
     '';
   };
@@ -44,11 +44,17 @@ let
     name = "init-wineprefix";
     runtimeInputs = [ cfg.winetricks cfg.wine ];
     text = ''
-      echo "Setting up VST Wine Prefix..."
-      mkdir -p $XDG_DATA_HOME/vstplugins
+      set WINEPREFIX "$XDG_DATA_HOME/vstplugins"
+      set VST2_DIR $WINEPREFIX/drive_c/Program\ Files/Steinberg/VstPlugins
+      set VST3_DIR "$WINEPREFIX/drive_c/Program\ Files/Common\ Files/VST3"
+      mkdir -p $VST2_DIR
+      mkdir -p $VST3_DIR
 
-      wincfg /v 10
-      exec "${cfg.tricks-command}"
+      echo "Setting up VST Wine Prefix..."
+      mkdir -p $WINEPREFIX
+
+      winecfg /v 10
+      ${cfg.tricks-command}
 
       echo "Wine Prefix is done setting up!"
     '';
@@ -58,9 +64,9 @@ let
     name = "install-single-vst-" + name;
     runtimeInputs = [ cfg.wine ] ++ inputs;
     text = ''
-      export "$WINEPREFIX"="$XDG_DATA_HOME/vstplugins"
-      export "$VST2_DIR"="$WINEPREFIX/drive_c/Program\ Files/Common\ Files/Steinberg/VstPlugins"
-      export "$VST3_DIR"="$WINEPREFIX/drive_c/Program\ Files/Common\ Files/VST3"
+      export WINEPREFIX="$XDG_DATA_HOME/vstplugins"
+      export VST2_DIR="$WINEPREFIX/drive_c/Program\ Files/Steinberg/VstPlugins"
+      export VST3_DIR="$WINEPREFIX/drive_c/Program\ Files/Common\ Files/VST3"
 
       echo "Installing ${name}..."
       #bash ''${pkgs.writeTextFile { name = name + ".sh"; text = install; destination = "/run.sh"; }}/run.sh
@@ -79,13 +85,21 @@ let
 
   init-windows-vst = writeFishApplication {
     name = "init-windows-vst";
+    runtimeInputs = [ cfg.yabridgectl ];
     text = ''
-      #!/usr/bin/env fish
+      set WINEPREFIX "$XDG_DATA_HOME/vstplugins"
+      set VST2_DIR $WINEPREFIX/drive_c/Program\ Files/Steinberg/VstPlugins
+      set VST3_DIR "$WINEPREFIX/drive_c/Program\ Files/Common\ Files/VST3"
       
-      if test ! -d $XDG_DATA_HOME/vstplugins
+      if test ! -d $WINEPREFIX
         ${init-wineprefix}/bin/init-wineprefix
         echo "Installing user defined plugins..."
         ${install-string}
+
+        yabridgectl add $VST2_DIR
+        yabridgectl add $VST3_DIR
+        yabridgectl sync
+
       else
         echo "Windows VSTs already set up!"
       end
@@ -178,8 +192,8 @@ in
 
     tricks-command = lib.mkOption {
       type = lib.types.str;
-      default = "winetricks allfonts";
-      example = "winetricks corefonts";
+      default = "winetricks corefonts";
+      example = "winetricks allfonts";
       description = ''
         The winetricks command to run when setting up the wineprefix
       '';
@@ -223,8 +237,8 @@ in
     # For some reason fish won't look at environment.interactiveShellInit,
     # so we set that manually.
     # There is likely some other shells that break this, probably all non POSIX shells
-    environment.interactiveShellInit = lib.mkIf cfg.check "sh ${check-installation}/bin/check-windows-vst-installation";
-    programs.fish.interactiveShellInit = lib.mkIf cfg.check "sh ${check-installation}/bin/check-windows-vst-installation";
+    environment.interactiveShellInit = lib.mkIf cfg.check "${pkgs.fish}/bin/fish ${check-installation}/bin/check-windows-vst-installation";
+    programs.fish.interactiveShellInit = lib.mkIf cfg.check "${pkgs.fish}/bin/fish ${check-installation}/bin/check-windows-vst-installation";
 
     #environment.systemPackages = lib.trace "debug ${install-packages} && ${install-packages-list} && ${install-packages-string}" [ cfg.yabridge cfg.yabridgectl init-windows-vst ];
     environment.systemPackages = [ cfg.yabridge cfg.yabridgectl init-windows-vst];
