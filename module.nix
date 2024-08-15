@@ -32,7 +32,7 @@ let
       
       if ! test -d "$WINEPREFIX"
         echo "----------------------------------"
-        echo "You have yet to initialize your Windows VSTs! Run 'windows-vst install' to set them up."
+        echo "🎶 You have yet to initialize your Windows VSTs! Run 'windows-vst install' to set them up. 🎶"
         echo "----------------------------------"
       end
     '';
@@ -50,13 +50,13 @@ let
       mkdir -p "$VST2_DIR"
       mkdir -p "$VST3_DIR"
 
-      echo "Setting up VST Wine Prefix..."
+      echo "🍷 Setting up VST Wine Prefix..."
       mkdir -p "$WINEPREFIX"
 
       winecfg /v 10
       ${cfg.tricks-command}
 
-      echo "Wine Prefix is done setting up!"
+      echo "🍷 Wine Prefix is done setting up!"
     '';
   };
 
@@ -73,9 +73,9 @@ let
       mkdir -p "$WORKDIR"
       cd "$WORKDIR"
       
-      echo "Installing ${name}..."
+      echo "📦 Installing ${name}..."
       ${install}
-      echo "${name} installed!"
+      echo "📦 ${name} installed!"
 
       rm -rf "$WORKDIR"
     '';
@@ -110,6 +110,7 @@ let
 
       # If there is a help flag, or no flag at all, print the help message
       if $run_help
+        echo "🎶 Windows VSTs 🎶"
         echo "Usage: windows-vst [install|init|sync|status] [options]"
         echo "Command: install: Install user defined plugins (also runs init)"
         echo "         init: Initialize the wineprefix"
@@ -137,28 +138,30 @@ let
         if $run_install
           ${init-wineprefix}/bin/init-wineprefix
 
-          echo "Installing user defined plugins..."
+          echo "📦 Installing user defined plugins..."
           ${install-string}
-          echo "Done installing user defined plugins!"
+          echo "📦 Done installing user defined plugins!"
           echo ""
 
           yabridgectl add "$VST2_DIR"
           yabridgectl add "$VST3_DIR"
           yabridgectl sync
           return 0
-        else:
-          echo "Windows VSTs already set up!"
-          echo "Run with '--force' to rerun installation"
+        else
+          echo "🎶 Windows VSTs already set up!"
+          echo "🎶 Run with '--force' to rerun installation"
           return 64
         end
       end
 
       if test $argv[1] = "sync"
+        echo "🎶 Running yabridgectl sync for WINEPREFIX $WINEPREFIX..."
         yabridgectl sync
         return $status
       end
 
       if test $argv[1] = "status"
+        echo "🎶 Running yabridgectl status for WINEPREFIX $WINEPREFIX..."
         yabridgectl status
         return $status
       end
