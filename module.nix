@@ -32,7 +32,7 @@ let
       
       if ! test -d "$WINEPREFIX"
         echo "----------------------------------"
-        echo "You have yet to initialize your Windows VSTs! Run 'init-windows-vst' to set them up."
+        echo "You have yet to initialize your Windows VSTs! Run 'windows-vst install' to set them up."
         echo "----------------------------------"
       end
     '';
@@ -89,28 +89,82 @@ let
   install-strings = lib.lists.zipListsWith (a: b: "${a}/bin/install-single-vst-${b}") installer-packages-list package-names;
   install-string = lib.strings.concatStringsSep "\n" install-strings;
 
-  init-windows-vst = writeFishApplication {
-    name = "init-windows-vst";
+  windows-vst = writeFishApplication {
+    name = "windows-vst";
     runtimeInputs = [ cfg.yabridgectl ];
     text = ''
       set WINEPREFIX "$XDG_DATA_HOME/vstplugins"
       set VST2_DIR "$WINEPREFIX/drive_c/Program Files/Steinberg/VstPlugins"
       set VST3_DIR "$WINEPREFIX/drive_c/Program Files/Common Files/VST3"
-      
-      if test ! -d $WINEPREFIX
+
+      argparse --name "windows-vst" h/help f/force -- $argv
+      or return
+
+      set -l run_help false
+      if set -ql _flag_help
+        set run_help true
+      end
+      if test (count $argv) -eq 0
+        set run_help true
+      end
+
+      # If there is a help flag, or no flag at all, print the help message
+      if $run_help
+        echo "Usage: windows-vst [install|init|sync|status] [options]"
+        echo "Command: install: Install user defined plugins (also runs init)"
+        echo "         init: Initialize the wineprefix"
+        echo "         sync: Sync the yabridge database"
+        echo "         status: Check the status of the yabridge"
+        echo ""
+        echo "Options: --help, -h: Show this help message"
+        echo "         --force, -f: Force the re-installation of user defined plugins"
+        return 0
+      end
+
+      if test $argv[1] = "init"
         ${init-wineprefix}/bin/init-wineprefix
-        echo "Installing user defined plugins..."
-        ${install-string}
+        return 0
+      end
 
-        yabridgectl add "$VST2_DIR"
-        yabridgectl add "$VST3_DIR"
+      if test $argv[1] = "install"
+        set -l run_install false
+        if set -ql _flag_force
+          set run_install true
+        end
+        if test ! -d "$WINEPREFIX"
+          set run_install true
+        end
+        if $run_install
+          ${init-wineprefix}/bin/init-wineprefix
+
+          echo "Installing user defined plugins..."
+          ${install-string}
+          echo "Done installing user defined plugins!"
+          echo ""
+
+          yabridgectl add "$VST2_DIR"
+          yabridgectl add "$VST3_DIR"
+          yabridgectl sync
+          return 0
+        else:
+          echo "Windows VSTs already set up!"
+          echo "Run with '--force' to rerun installation"
+          return 64
+        end
+      end
+
+      if test $argv[1] = "sync"
         yabridgectl sync
+        return $status
+      end
 
-      else
-        echo "Windows VSTs already set up!"
+      if test $argv[1] = "status"
+        yabridgectl status
+        return $status
       end
     '';
   };
+
 in
   {
 
@@ -253,6 +307,6 @@ in
     programs.fish.interactiveShellInit = lib.mkIf cfg.check "${pkgs.fish}/bin/fish ${check-installation}/bin/check-windows-vst-installation";
 
     #environment.systemPackages = lib.trace "debug ${install-packages} && ${install-packages-list} && ${install-packages-string}" [ cfg.yabridge cfg.yabridgectl init-windows-vst ];
-    environment.systemPackages = [ cfg.yabridge cfg.yabridgectl init-windows-vst];
+    environment.systemPackages = [ cfg.yabridge cfg.yabridgectl windows-vst];
   };
 }
