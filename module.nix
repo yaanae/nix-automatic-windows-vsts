@@ -1,8 +1,10 @@
 
 {lib, pkgs, config, ...}:
 let 
+  # The actual set values in users configuration
   cfg = config.nix-automatic-windows-vsts;
 
+  # Inpired by writeShellApplication, but with less options and for fish instead of bash
   writeFishApplication = {name, runtimeInputs ? [], text}: pkgs.writeTextFile {
     name = name;
     executable = true;
@@ -28,7 +30,7 @@ let
   check-installation = writeFishApplication {
     name = "check-windows-vst-installation";
     text = ''
-      set WINEPREFIX "$XDG_DATA_HOME/vstplugins"
+      set WINEPREFIX "${cfg.prefixPath}"
       
       if ! test -d "$WINEPREFIX"
         echo "----------------------------------"
@@ -44,7 +46,7 @@ let
     name = "init-wineprefix";
     runtimeInputs = [ cfg.winetricks cfg.wine ];
     text = ''
-      set WINEPREFIX "$XDG_DATA_HOME/vstplugins"
+      set WINEPREFIX "${cfg.prefixPath}"
       set VST2_DIR "$WINEPREFIX/drive_c/Program Files/Steinberg/VstPlugins"
       set VST3_DIR "$WINEPREFIX/drive_c/Program Files/Common Files/VST3"
       mkdir -p "$VST2_DIR"
@@ -60,11 +62,12 @@ let
     '';
   };
 
+  # Bash environment for the installation scripts
   install-single-vst = name: install: inputs: (pkgs.writeShellApplication {
     name = "install-single-vst-" + name;
     runtimeInputs = [ cfg.wine ] ++ inputs;
     text = ''
-      export WINEPREFIX="$XDG_DATA_HOME/vstplugins"
+      export WINEPREFIX="${cfg.prefixPath}"
       export VST2_DIR="$WINEPREFIX/drive_c/Program Files/Steinberg/VstPlugins"
       export VST3_DIR="$WINEPREFIX/drive_c/Program Files/Common Files/VST3"
 
@@ -81,25 +84,33 @@ let
     '';
   });
 
+  # A list of the plugins that is a little easier to handle: [ {name, install, inputs} {...} ]
   packages = lib.attrsets.mapAttrsToList (name: value: {name = name; install = value.install; inputs = value.inputs;}) cfg.plugins;
+  # The installer packages: [ install-single-vst-${name} ... ]
   installer-packages = lib.lists.concatMap (pkg: [ (install-single-vst pkg.name pkg.install pkg.inputs) ]) packages;
+  # The list of paths to the installer packages: [ /nix/store/...-install-single-vst-${name} ... ]
   installer-packages-list = lib.lists.concatMap (pkg: [ "${pkg}" ]) installer-packages;
-  #installer-packages-string = lib.strings.concatStringsSep " " installer-packages-list;
+  # The package names: [ ${name} ... ]
   package-names = lib.lists.concatMap (pkg: [ "${pkg.name}" ]) packages;
+  # The command strings to run the installers: [ /nix/store/...-install-single-vst-${name}/bin/install-single-vst-${name} ... ]
   install-strings = lib.lists.zipListsWith (a: b: "${a}/bin/install-single-vst-${b}") installer-packages-list package-names;
+  # And wrap it all into a single string to run in the fish script
   install-string = lib.strings.concatStringsSep "\n" install-strings;
 
+  # The main function for the windows-vst command
   windows-vst = writeFishApplication {
     name = "windows-vst";
     runtimeInputs = [ cfg.yabridgectl ];
     text = ''
-      set WINEPREFIX "$XDG_DATA_HOME/vstplugins"
+      set WINEPREFIX "${cfg.prefixPath}"
       set VST2_DIR "$WINEPREFIX/drive_c/Program Files/Steinberg/VstPlugins"
       set VST3_DIR "$WINEPREFIX/drive_c/Program Files/Common Files/VST3"
 
+      # Parse the arguments. They are available as $_flag_help, ...
       argparse --name "windows-vst" h/help f/force -- $argv
       or return
 
+      # Couldn't figure out how to join this in a single line, so here we are
       set -l run_help false
       if set -ql _flag_help
         set run_help true
@@ -211,7 +222,7 @@ in
             type = lib.types.listOf lib.types.package;
             default = [];
             example = [ pkgs.unzip ];
-            description = "Extra nix packages to use during installation";
+            description = "Extra nix packages to use during installation. Wine is always available.";
           };
         };
       });
@@ -224,6 +235,13 @@ in
             mv "NES VST 1.2.dll" "$VST2_DIR/NES VST 1.2.dll"
           '';
           inputs = [ pkgs.unzip ];
+        };
+        "grace" = {
+          enable = true;
+          install = ''
+            cp ''${inputs.grace} installer.exe
+            wine installer.exe
+          '';
         };
       };
       description = ''
@@ -293,14 +311,16 @@ in
     # Allow the user to create a custom wine prefix location
     prefixPath = lib.mkOption {
       type = lib.types.path;
-      default = "$HOME/.local/share/nix-vsts";
-      example = "$HOME/.local/share/nix-vsts";
+      default = "$HOME/.local/share/windows-vst";
+      example = "$HOME/.local/share/windows-vst";
       description = ''
-        The path to the wine prefix to generate and use
+        The path to the wine prefix to generate and use.
       '';
     };
   };
-
+  
+  # Consider this like the users 'configuration.nix'
+  # We can set the same options as the user can in there, and they are later merged together
   config = lib.mkIf cfg.enable {
     # Run a command when the users interactive shell is started
     # For some reason fish won't look at environment.interactiveShellInit,
@@ -309,7 +329,9 @@ in
     environment.interactiveShellInit = lib.mkIf cfg.check "${pkgs.fish}/bin/fish ${check-installation}/bin/check-windows-vst-installation";
     programs.fish.interactiveShellInit = lib.mkIf cfg.check "${pkgs.fish}/bin/fish ${check-installation}/bin/check-windows-vst-installation";
 
-    #environment.systemPackages = lib.trace "debug ${install-packages} && ${install-packages-list} && ${install-packages-string}" [ cfg.yabridge cfg.yabridgectl init-windows-vst ];
+    # Add the windows-vst command to the users shell
+    # Also, we need at minimum yabridge in the users environment, otherwise
+    # the generated plugin.so vst-plugins won't find it.
     environment.systemPackages = [ cfg.yabridge cfg.yabridgectl windows-vst];
   };
 }
