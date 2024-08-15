@@ -30,7 +30,7 @@ let
     text = ''
       set WINEPREFIX "$XDG_DATA_HOME/vstplugins"
       
-      if ! test -d $WINEPREFIX
+      if ! test -d "$WINEPREFIX"
         echo "----------------------------------"
         echo "You have yet to initialize your Windows VSTs! Run 'init-windows-vst' to set them up."
         echo "----------------------------------"
@@ -45,13 +45,13 @@ let
     runtimeInputs = [ cfg.winetricks cfg.wine ];
     text = ''
       set WINEPREFIX "$XDG_DATA_HOME/vstplugins"
-      set VST2_DIR $WINEPREFIX/drive_c/Program\ Files/Steinberg/VstPlugins
-      set VST3_DIR "$WINEPREFIX/drive_c/Program\ Files/Common\ Files/VST3"
-      mkdir -p $VST2_DIR
-      mkdir -p $VST3_DIR
+      set VST2_DIR "$WINEPREFIX/drive_c/Program Files/Steinberg/VstPlugins"
+      set VST3_DIR "$WINEPREFIX/drive_c/Program Files/Common Files/VST3"
+      mkdir -p "$VST2_DIR"
+      mkdir -p "$VST3_DIR"
 
       echo "Setting up VST Wine Prefix..."
-      mkdir -p $WINEPREFIX
+      mkdir -p "$WINEPREFIX"
 
       winecfg /v 10
       ${cfg.tricks-command}
@@ -65,13 +65,19 @@ let
     runtimeInputs = [ cfg.wine ] ++ inputs;
     text = ''
       export WINEPREFIX="$XDG_DATA_HOME/vstplugins"
-      export VST2_DIR="$WINEPREFIX/drive_c/Program\ Files/Steinberg/VstPlugins"
-      export VST3_DIR="$WINEPREFIX/drive_c/Program\ Files/Common\ Files/VST3"
+      export VST2_DIR="$WINEPREFIX/drive_c/Program Files/Steinberg/VstPlugins"
+      export VST3_DIR="$WINEPREFIX/drive_c/Program Files/Common Files/VST3"
 
+      WORKDIR="$(mktemp -d)"
+      export WORKDIR
+      mkdir -p "$WORKDIR"
+      cd "$WORKDIR"
+      
       echo "Installing ${name}..."
-      #bash ''${pkgs.writeTextFile { name = name + ".sh"; text = install; destination = "/run.sh"; }}/run.sh
       ${install}
       echo "${name} installed!"
+
+      rm -rf "$WORKDIR"
     '';
   });
 
@@ -88,16 +94,16 @@ let
     runtimeInputs = [ cfg.yabridgectl ];
     text = ''
       set WINEPREFIX "$XDG_DATA_HOME/vstplugins"
-      set VST2_DIR $WINEPREFIX/drive_c/Program\ Files/Steinberg/VstPlugins
-      set VST3_DIR "$WINEPREFIX/drive_c/Program\ Files/Common\ Files/VST3"
+      set VST2_DIR "$WINEPREFIX/drive_c/Program Files/Steinberg/VstPlugins"
+      set VST3_DIR "$WINEPREFIX/drive_c/Program Files/Common Files/VST3"
       
       if test ! -d $WINEPREFIX
         ${init-wineprefix}/bin/init-wineprefix
         echo "Installing user defined plugins..."
         ${install-string}
 
-        yabridgectl add $VST2_DIR
-        yabridgectl add $VST3_DIR
+        yabridgectl add "$VST2_DIR"
+        yabridgectl add "$VST3_DIR"
         yabridgectl sync
 
       else
@@ -133,9 +139,15 @@ in
             default = '''';
             example = ''
               unzip ''${inputs.nes-vst}
-              mv "NES VST 1.2.dll" $VST2_DIR
+              mv "NES VST 1.2.dll" "$VST2_DIR/NES VST 1.2.dll"
             '';
-            description = "The installation script for the plugin";
+            description = ''
+              The installation script for the plugin
+              The variables $WINEPREFIX, $VST2_DIR and $VST3_DIR are available
+              A temporary directory is created and the script is run from there
+              Wine is available without adding it in inputs
+              Uses shellcheck (for bash) by default
+            '';
           };
           # Extra nix packages to install
           inputs = lib.mkOption {
@@ -152,7 +164,7 @@ in
           enable = true;
           install = ''
             unzip ''${inputs.nes-vst}
-            mv "NES VST 1.2.dll" $VST2_DIR
+            mv "NES VST 1.2.dll" "$VST2_DIR/NES VST 1.2.dll"
           '';
           inputs = [ pkgs.unzip ];
         };
