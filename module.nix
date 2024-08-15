@@ -85,13 +85,15 @@ let
   });
 
   # A list of the plugins that is a little easier to handle: [ {name, install, inputs} {...} ]
-  packages = lib.attrsets.mapAttrsToList (name: value: {name = name; install = value.install; inputs = value.inputs;}) cfg.plugins;
+  packages = lib.attrsets.mapAttrsToList (name: value: {name = name; install = value.install; inputs = value.inputs; enable = value.enable;}) cfg.plugins;
+  # Packages that actually are enabled. See above.
+  enabled-packages = lib.lists.concatMap (pkg: if pkg.enable then [ pkg ] else []) packages;
   # The installer packages: [ install-single-vst-${name} ... ]
-  installer-packages = lib.lists.concatMap (pkg: [ (install-single-vst pkg.name pkg.install pkg.inputs) ]) packages;
+  installer-packages = lib.lists.concatMap (pkg: [ (install-single-vst pkg.name pkg.install pkg.inputs) ]) enabled-packages;
   # The list of paths to the installer packages: [ /nix/store/...-install-single-vst-${name} ... ]
   installer-packages-list = lib.lists.concatMap (pkg: [ "${pkg}" ]) installer-packages;
   # The package names: [ ${name} ... ]
-  package-names = lib.lists.concatMap (pkg: [ "${pkg.name}" ]) packages;
+  package-names = lib.lists.concatMap (pkg: [ "${pkg.name}" ]) enabled-packages;
   # The command strings to run the installers: [ /nix/store/...-install-single-vst-${name}/bin/install-single-vst-${name} ... ]
   install-strings = lib.lists.zipListsWith (a: b: "${a}/bin/install-single-vst-${b}") installer-packages-list package-names;
   # And wrap it all into a single string to run in the fish script
@@ -122,9 +124,10 @@ let
       # If there is a help flag, or no flag at all, print the help message
       if $run_help
         echo "🎶 Windows VSTs 🎶"
-        echo "Usage: windows-vst [install|init|sync|status] [options]"
+        echo "Usage: windows-vst [install|init|reset|sync|status] [options]"
         echo "Command: install: Install user defined plugins (also runs init)"
         echo "         init: Initialize the wineprefix"
+        echo "         reset: Reset and remove the installation"
         echo "         sync: Sync the yabridge database"
         echo "         status: Check the status of the yabridge"
         echo ""
@@ -162,6 +165,24 @@ let
           echo "🎶 Windows VSTs already set up!"
           echo "🎶 Run with '--force' to rerun installation"
           return 64
+        end
+      end
+
+      if test $argv[1] = "reset"
+        echo "❌ Reset Windows VSTs..."
+        echo "Are you sure you want to reset the Windows VSTs?"
+        echo "This will remove your user data, plugin-license files and settings,"
+        echo "unless they are defined by the installation scripts."
+
+        set res (read --prompt-str "Are you sure you want to continue? (y/N) " --nchars 1)
+        if test "$res" = "y"
+          echo "❌ Removing Windows VSTs..."
+          rm -rf "$WINEPREFIX"
+          echo "❌ Windows VSTs removed!"
+          return 0
+        else
+          echo "🎶 Reset cancelled!"
+          return 0
         end
       end
 
@@ -278,7 +299,7 @@ in
     };
 
     tricks-command = lib.mkOption {
-      type = lib.types.str;
+      type = lib.types.lines;
       default = "winetricks corefonts";
       example = "winetricks allfonts";
       description = ''
@@ -310,7 +331,7 @@ in
 
     # Allow the user to create a custom wine prefix location
     prefixPath = lib.mkOption {
-      type = lib.types.path;
+      type = lib.types.str;
       default = "$HOME/.local/share/windows-vst";
       example = "$HOME/.local/share/windows-vst";
       description = ''
