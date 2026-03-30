@@ -38,7 +38,7 @@ let
   # This fish script will set up the wineprefix for the user
   init-wineprefix = writeFishApplication {
     name = "init-wineprefix";
-    runtimeInputs = [ cfg.winetricks cfg.wine ];
+    runtimeInputs = [ cfg.winetricks pkgs.wineWow64Packages.yabridge ];
     text = ''
       set WINEPREFIX "${cfg.prefixPath}"
       set VST2_DIR "$WINEPREFIX/drive_c/Program Files/Steinberg/VstPlugins"
