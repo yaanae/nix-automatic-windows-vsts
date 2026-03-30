@@ -19,12 +19,6 @@ let
     '';
   };
 
-  defaultWine = pkgs.wine.override {
-    embedInstallers = true; # Mono (and gecko, although we probably don't need that) will be installed automatically
-    wineRelease = "staging"; # Recommended by yabridge
-    wineBuild = "wineWow"; # Both 32-bit and 64-bit wine
-  };
-
   # The installation checker.
   # This fish script will check if the correct wineprefix is set up and warn otherwise
   check-installation = writeFishApplication {
@@ -65,7 +59,7 @@ let
   # Bash environment for the installation scripts
   install-single-vst = name: install: inputs: (pkgs.writeShellApplication {
     name = "install-single-vst-" + name;
-    runtimeInputs = [ cfg.wine ] ++ inputs;
+    runtimeInputs = [ pkgs.wineWow64Packages.yabridge ] ++ inputs;
     text = ''
       export WINEPREFIX="${cfg.prefixPath}"
       export VST2_DIR="$WINEPREFIX/drive_c/Program Files/Steinberg/VstPlugins"
@@ -277,17 +271,6 @@ in
       description = "Check if the installation is done on shell start";
     };
 
-    # Allow the user to use custom wine version
-    wine = lib.mkOption {
-      type = lib.types.package;
-      default = defaultWine;
-      example = pkgs.wine.override { embedInstallers = true; };
-      description = ''
-        The wine version to use.
-        "embedInstallers" override in wine is recommended to be set to true
-      '';
-    };
-
     # Allow the user to use custom winetricks version
     winetricks = lib.mkOption {
       type = lib.types.package;
@@ -309,23 +292,19 @@ in
 
     yabridge = lib.mkOption {
       type = lib.types.package;
-      default = pkgs.yabridge.override { wine = cfg.wine; };
-      example = pkgs.yabridge.override { wine = cfg.wine; };
+      default = pkgs.yabridge;
+      example = pkgs.yabridge;
       description = ''
         The yabridge version to use.
-        "wine" should probably be the same as the "wine" option
-        if you want to use your own yabridge version
       '';
     };
 
     yabridgectl = lib.mkOption {
       type = lib.types.package;
-      default = pkgs.yabridgectl.override { wine = cfg.wine; };
-      example = pkgs.yabridgectl.override { wine = cfg.wine; };
+      default = pkgs.yabridgectl;
+      example = pkgs.yabridgectl;
       description = ''
         The yabridgectl version to use.
-        "wine" should probably be the same as the "wine" option
-        if you want to use your own yabridgectl version
       '';
     };
 

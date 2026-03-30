@@ -98,15 +98,11 @@ tricks-command = "winetricks corefonts";
 # Winetricks package to use
 winetricks = pkgs.winetricks;
 
-# Wine package to use
-# Please use embedInstallers to have mono available
-wine = pkgs.wine.override { embedInstallers = true; wineRelease = "staging"; wineBuild = "wineWow"; };
-
 # Yabridge package.
-yabridge = pkgs.yabridge.override { inherit wine; };
+yabridge = pkgs.yabridge;
 
 # Yabridgectl package;
-yabridgectl = pkgs.yabridgectl.override { inherit wine; };
+yabridgectl = pkgs.yabridgectl;
 ```
 
 
